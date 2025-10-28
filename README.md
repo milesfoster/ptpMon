@@ -11,6 +11,7 @@ The following devices are currently supported with the following arg names:
   - 9821-AG-HUB -> 9821aghub
   - evIPG-3G -> evIPG
   - SCORPION-6F -> scorpion6f
+  - SCORPION-X18 -> scorpionx18
   - sVIP -> svip
   - 570TG-100G -> 570tg
   - evVIP-100G -> vip100g
