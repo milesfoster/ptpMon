@@ -40,6 +40,10 @@ class ptpMon:
                         from params.scorpion6fParams import params, lookups
                         print(params, 'imported params')
 
+                    case 'scorpionx18':
+                        from params.scorpionx18Params import params, lookups
+                        print(params, 'imported params')
+
                     case '570j2k':
                         from params.j2kParams import params, lookups
                         print(params, 'imported params')
