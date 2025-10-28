@@ -1,4 +1,4 @@
-## PTP Mon
+## PTP Monitor
 
 ptpMon is designed for the MAGNUM-Analytics Poller application. This poller uses the cfgjsonrpc webeasy program to retrieve device PTP state. 
 
