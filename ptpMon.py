@@ -13,7 +13,7 @@ class ptpMon:
     def __init__(self, **kwargs):
 
         self.hosts = []
-        self.proto = "http"
+        self.proto = ""
 
         self.parameters = []
 
@@ -71,6 +71,12 @@ class ptpMon:
                 self.importedParams = params
                 self.importedLookups = lookups
 
+            if "evaluateLeaderEligibility" in key and value:
+                self.evalEligibility = value
+
+            if "eligibleRootLeaders" in key and value:
+                self.eligibleLeaders = value
+
             if "proto" in key and value:
                 self.proto = value
 
@@ -78,27 +84,28 @@ class ptpMon:
 
             template_copy = copy.deepcopy(template)
             self.parameters.append(template_copy)
+    import requests
+
+    def checkProto(self, host, timeout=3):
+        """
+        Determines whether a host supports HTTP or HTTPS by testing HTTP first
+        and following redirects. Falls back to HTTPS if HTTP fails completely.
+        """
+        test_url = f"http://{host}"
+        print(test_url)
+        try:
+            r = requests.get(test_url, timeout=timeout, allow_redirects=True)
+            self.proto = "http"
+
+        except requests.RequestException:
+
+            try:
+                r = requests.head(f"https://{host}", verify=False, timeout=timeout)
+                if r.ok:
+                    self.proto = "https"
+            except requests.RequestException:
+                raise ConnectionError(f"Could not connect to {host} using HTTP or HTTPS.")
         
-
-    def checkProto(self, host):
-        param = [self.parameters[0]]
-        print(param, 'param')
-        self.proto = 'http'
-        protoCheck = []
-
-        for template in param:
-            template_copy = copy.deepcopy(template)
-            template_copy["id"] = template_copy["id"].format(str(0))
-            protoCheck.append(template_copy)
-
-
-        results = self.fetch(host, protoCheck)
-
-        if isinstance(results, Exception):
-          self.proto = 'https'
-             
-        else:
-          self.proto = 'http'
 
     def fetch(self, host, parameters):
 
@@ -162,6 +169,15 @@ class ptpMon:
                 # perform lookup for link select enumeration
                 elif "ptp_status" in result["name"]:
                     result["value"] = self.importedLookups[1][result["value"]]
+
+                # evaluate if root leader is part of the provided eligible list
+                if self.evalEligibility:
+                    if "grandmaster_identity" in result["name"]:
+                        hosts.update(
+                            {
+                                "b_followingEligibleRootLeader": "True" if result["value"] in self.eligibleLeaders else "False"
+                            }
+                        )
 
                 if result["name"] not in hosts.keys():
                     hosts.update(
@@ -228,8 +244,10 @@ class ptpMon:
 
 def main():
 
-    params = {"hosts": ["172.17.238.91"],  
-              "deviceType": "570aco"}
+    params = {"hosts": ["172.17.223.117", "172.17.223.214"],  
+              "deviceType": "evIPG",
+              "evaluateLeaderEligibility": True,
+              "eligibleRootLeaders": ["MAC-1", "00-02-C5-FF-FE-21-62-0A"]}
 
     collector = ptpMon(**params)
 
