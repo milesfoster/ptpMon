@@ -94,11 +94,10 @@ class ptpMon:
         test_url = f"http://{host}"
         print(test_url)
         try:
-            r = requests.get(test_url, timeout=timeout, allow_redirects=True)
-            self.proto = "http"
+            r = requests.get(test_url, timeout=timeout, verify=False, allow_redirects=True)
+            self.proto = r.url.split(":", 1)[0]
 
         except requests.RequestException:
-
             try:
                 r = requests.head(f"https://{host}", verify=False, timeout=timeout)
                 if r.ok:
