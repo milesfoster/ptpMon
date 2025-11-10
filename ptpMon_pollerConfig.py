@@ -18,6 +18,9 @@ from ptpMon import ptpMon
     # 570TG-100G -> 570tg
     # evVIP-100G -> vip100g
 
+# Set evaluateLeaderEligibility to True or False if you want Root Leader eligibility assessment
+# If evaluateLeaderEligibility is set to true, provide eligible root leaders as they are represented on the host Webeasy
+    # some represent MAC with colons, others use dashes. 00:1A:XX:XX:XX:XX vs. 00-1A-XX-XX-XX-XX
 
 class Plugin(InsitePlugin):
     def can_group(self):
@@ -32,13 +35,15 @@ class Plugin(InsitePlugin):
         except Exception:
 
             params = {"hosts": hosts,
-                      "deviceType": "570aco"}
+                      "deviceType": "570aco",
+                      "evaluateLeaderEligibility": True,
+                      "eligibleRootLeaders": ["MAC-ADDRESS-1", "MAC-ADDRESS-2"]}
 
             self.collector = ptpMon(**params)
 
         documents = []
 
-        for host, params in collector.collect.items():
+        for host, params in self.collector.collect.items():
 
             document = {"fields": params, "host": host, "name": "ptpStatus"}
 
