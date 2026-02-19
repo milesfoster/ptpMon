@@ -104,6 +104,43 @@ class ptpMon:
                 except requests.RequestException:
                     raise ConnectionError(f"Could not connect to {host} using HTTP or HTTPS.")
 
+    def checkEndpoint(self, host, proto):
+
+            endpoint_url = f"{proto}://{host}/cgi-bin/cfgjsonrpc" 
+
+            try:
+                r = requests.get(endpoint_url, verify=False, timeout=5)
+
+                if r.status_code == 200:
+                    return 'cfgjsonrpc'
+                
+                else:
+                    # treat anything else (403/404/etc.) as failure
+                    raise requests.exceptions.HTTPError(f"Bad status: {r.status_code}")
+
+            except requests.RequestException:
+                # Try the .php endpoint
+                try:
+                    r = requests.head(
+                        f"{proto}://{host}/cgi-bin/cfgjsonrpc.php",
+                        verify=False,
+                        timeout=5
+                    )
+
+                    if r.ok:
+                        print('.php worked')
+                        return "cfgjsonrpc.php"
+
+                    else:
+                        raise ConnectionError(
+                            f"Bad status for .php endpoint: {r.status_code}"
+                        )
+
+                except requests.RequestException:
+                    raise ConnectionError(
+                        f"Could not find valid endpoint on {host}(cfgjsonrpc or cfgjsonrpc.php)."
+                    )
+
     def fetch(self, host, parameters):
 
         try:
