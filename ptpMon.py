@@ -141,7 +141,7 @@ class ptpMon:
                         f"Could not find valid endpoint on {host}(cfgjsonrpc or cfgjsonrpc.php)."
                     )
 
-    def fetch(self, host, parameters):
+    def fetch(self, host, proto, endpoint):
 
         try:
 
@@ -149,7 +149,7 @@ class ptpMon:
 
                 ## get the session ID from accessing the login.php site
                 resp = session.get(
-                    "%s://%s/login.php" % (self.proto, host),
+                    "%s://%s/login.php" % (proto, host),
                     verify=False,
                     timeout=15.0,
                 )
@@ -159,11 +159,12 @@ class ptpMon:
                 payload = {
                     "jsonrpc": "2.0",
                     "method": "get",
-                    "params": {"parameters": parameters},
+                    "params": {"parameters": self.parameters},
                     "id": 1,
                 }
 
-                url = "%s://%s/cgi-bin/cfgjsonrpc" % (self.proto, host)
+                url = "%s://%s/cgi-bin/%s" % (proto, host, endpoint)
+                print(url)
 
                 headers = {
                     "Content-type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -177,7 +178,7 @@ class ptpMon:
                     verify=False,
                     timeout=15.0,
                 )
-
+                print(response.status_code)
                 return json.loads(response.text)
 
         except Exception as error:
