@@ -84,27 +84,25 @@ class ptpMon:
 
             template_copy = copy.deepcopy(template)
             self.parameters.append(template_copy)
-    import requests
 
     def checkProto(self, host, timeout=3):
-        """
-        Determines whether a host supports HTTP or HTTPS by testing HTTP first
-        and following redirects. Falls back to HTTPS if HTTP fails completely.
-        """
-        test_url = f"http://{host}"
-        print(test_url)
-        try:
-            r = requests.get(test_url, timeout=timeout, verify=False, allow_redirects=True)
-            self.proto = r.url.split(":", 1)[0]
-
-        except requests.RequestException:
+            """
+            Determines whether a host supports HTTP or HTTPS by testing HTTP first
+            and following redirects. Falls back to HTTPS if HTTP fails completely.
+            """
+            test_url = f"http://{host}"
+            print(test_url)
             try:
-                r = requests.head(f"https://{host}", verify=False, timeout=timeout)
-                if r.ok:
-                    self.proto = "https"
+                r = requests.get(test_url, timeout=timeout, verify=False, allow_redirects=True)
+                return "http"
+
             except requests.RequestException:
-                raise ConnectionError(f"Could not connect to {host} using HTTP or HTTPS.")
-        
+                try:
+                    r = requests.head(f"https://{host}", verify=False, timeout=timeout)
+                    if r.ok:
+                        return "https"
+                except requests.RequestException:
+                    raise ConnectionError(f"Could not connect to {host} using HTTP or HTTPS.")
 
     def fetch(self, host, parameters):
 
@@ -149,15 +147,14 @@ class ptpMon:
             return error
 
     def parse_results(self, host, collection):
-
-        self.checkProto(host)
-        print(self.proto)
-
-        results = self.fetch(host, self.parameters)
+        
         host_instance = {host: {}}
         hosts = host_instance[host]
 
         try:
+            proto = self.checkProto(host)
+            endpoint = self.checkEndpoint(host, proto)
+            results = self.fetch(host, proto, endpoint)
 
             for result in results["result"]["parameters"]:
 
@@ -191,7 +188,9 @@ class ptpMon:
                     hosts.update({result["name"]: result["value"]})
                     # hosts["as_ids"].append(result["id"])
 
-            
+            if hosts.get("ptp_status") != "Converged":
+                hosts.update({"b_followingEligibleRootLeader": "False"})
+
             collection.update(host_instance)
 
         except Exception as e:
@@ -252,18 +251,33 @@ def main():
 
     inputQuit = False
 
-    while inputQuit is not "q":
-
+    while inputQuit != "q":
         documents = []
 
-        for host, params in collector.collect.items():
+        for host, data in collector.collect.items():
+            # Handle host-level errors
+            if data["error"]:
+                documents.append({
+                    "host": host,
+                    "name": "merged",
+                    "fields": {
+                        "status": "error",
+                        "error_message": data["error"]
+                    }
+                })
+                continue
 
-            document = {"fields": params, "host": host, "name": "ptpStatus"}
-
-            documents.append(document)
+            # Handle successful data
+            for _, params in data["decoders"].items():
+                document = {
+                    "fields": params, 
+                    "host": host, 
+                    "name": "merged",
+                    "status": "success"
+                }
+                documents.append(document)
 
         print(json.dumps(documents, indent=1))
-
         inputQuit = input("\nType q to quit or just hit enter: ")
 
 
