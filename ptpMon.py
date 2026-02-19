@@ -232,14 +232,7 @@ class ptpMon:
             collection.update(host_instance)
 
         except Exception as e:
-            hosts.update({
-                'active_ptp': 'N/A',
-                'ptp_status': 'N/A',
-                's_master_identity': 'N/A',
-                's_grandmaster_identity': 'N/A'
-            })
-            collection.update(host_instance)
-            print(e)
+            host_data["error"] = str(e)
 
     @property
     def collect(self):
