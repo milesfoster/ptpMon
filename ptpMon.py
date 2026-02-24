@@ -90,17 +90,21 @@ class ptpMon:
             Determines whether a host supports HTTP or HTTPS by testing HTTP first
             and following redirects. Falls back to HTTPS if HTTP fails completely.
             """
-            test_url = f"http://{host}"
+            test_url = f"https://{host}"
             print(test_url)
             try:
                 r = requests.get(test_url, timeout=timeout, verify=False, allow_redirects=True)
-                return "http"
+                if r.ok and len(r.content) > 0:
+                    return "http"
+                else:
+                    pass
 
             except requests.RequestException:
                 try:
                     r = requests.head(f"https://{host}", verify=False, timeout=timeout)
                     if r.ok:
                         return "https"
+                        
                 except requests.RequestException:
                     raise ConnectionError(f"Could not connect to {host} using HTTP or HTTPS.")
 
@@ -186,7 +190,9 @@ class ptpMon:
 
     def parse_results(self, host, collection):
         
-        host_instance = {host: {}}
+        host_instance = {host: {
+            "error": None
+        }}
         hosts = host_instance[host]
 
         try:
@@ -232,7 +238,8 @@ class ptpMon:
             collection.update(host_instance)
 
         except Exception as e:
-            host_data["error"] = str(e)
+            hosts["error"] = str(e)
+            collection.update(host_instance)
 
     @property
     def collect(self):
@@ -290,7 +297,7 @@ def main():
             if data["error"]:
                 documents.append({
                     "host": host,
-                    "name": "merged",
+                    "name": "ptpStatus",
                     "fields": {
                         "status": "error",
                         "error_message": data["error"]
@@ -299,11 +306,11 @@ def main():
                 continue
 
             # Handle successful data
-            for _, params in data["decoders"].items():
+            else:
                 document = {
-                    "fields": params, 
+                    "fields": data, 
                     "host": host, 
-                    "name": "merged",
+                    "name": "ptpStatus",
                     "status": "success"
                 }
                 documents.append(document)
