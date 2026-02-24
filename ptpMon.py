@@ -294,7 +294,7 @@ def main():
 
         for host, data in collector.collect.items():
             # Handle host-level errors
-            if data["error"]:
+            if data.get("error"):
                 documents.append({
                     "host": host,
                     "name": "ptpStatus",
