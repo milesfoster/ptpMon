@@ -43,10 +43,25 @@ class Plugin(InsitePlugin):
 
         documents = []
 
-        for host, params in self.collector.collect.items():
+        for host, data in self.collector.collect.items():
+            if data["error"]:
+                documents.append({
+                    "host": host,
+                    "name": "ptpStatus",
+                    "fields": {
+                        "status": "error",
+                        "error_message": data["error"]
+                    }
+                })
+                continue
 
-            document = {"fields": params, "host": host, "name": "ptpStatus"}
-
-            documents.append(document)
+            else:
+                document = {
+                    "fields": data, 
+                    "host": host, 
+                    "name": "ptpStatus",
+                    "status": "success"
+                }
+                documents.append(document)
 
         return json.dumps(documents)
