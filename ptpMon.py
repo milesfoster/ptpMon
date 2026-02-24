@@ -192,9 +192,7 @@ class ptpMon:
 
     def parse_results(self, host, collection):
         
-        host_instance = {host: {
-            "error": None
-        }}
+        host_instance = {host: {}}
         hosts = host_instance[host]
 
         try:
