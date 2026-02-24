@@ -90,7 +90,7 @@ class ptpMon:
             Determines whether a host supports HTTP or HTTPS by testing HTTP first
             and following redirects. Falls back to HTTPS if HTTP fails completely.
             """
-            test_url = f"https://{host}"
+            test_url = f"http://{host}"
             print(test_url)
             try:
                 r = requests.get(test_url, timeout=timeout, verify=False, allow_redirects=True)
