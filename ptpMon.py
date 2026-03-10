@@ -240,7 +240,7 @@ class ptpMon:
             proto = self.checkProto(host)
             endpoint = self.checkEndpoint(host, proto)
 
-            if endpoint == '/v.1.5/php/datas/cfgjsonrpc.php'
+            if endpoint == '/v.1.5/php/datas/cfgjsonrpc.php':
                 results = self.auth_fetch(host, proto)
                 
             else: 
