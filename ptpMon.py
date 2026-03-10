@@ -198,7 +198,7 @@ class ptpMon:
             return error
 
 
-    def auth_fetch(self, host, proto, endpoint):
+    def auth_fetch(self, host, proto):
 
         try:
 
@@ -213,8 +213,7 @@ class ptpMon:
                     "id": 1,
                 }
 
-                url = "%s://%s/cgi-bin/%s" % (proto, host, endpoint)
-                print(url)
+                url = "%s://%s/v.1.5/php/datas/cfgjsonrpc.php" % (proto, host)
 
                 headers = {"Content-type": "application/x-www-form-urlencoded; charset=UTF-8"}
 
@@ -238,12 +237,12 @@ class ptpMon:
 
         try:
             proto = self.checkProto(host)
-            endpoint = self.checkEndpoint(host, proto)
 
             if self.auth:
-                results = self.auth_fetch(host, proto, endpoint)
+                results = self.auth_fetch(host, proto)
             
             else:
+                endpoint = self.checkEndpoint(host, proto)
                 results = self.fetch(host, proto, endpoint)
 
             for result in results["result"]["parameters"]:
@@ -330,6 +329,7 @@ def main():
               "deviceType": "evIPG",
               "evaluateLeaderEligibility": True,
               "eligibleRootLeaders": ["MAC-1", "00-02-C5-FF-FE-21-62-0A"],
+               # Enforces auth, only enable if supported/required by device
               "credentials" : {"root" : "evertz"}}
 
     collector = ptpMon(**params)
