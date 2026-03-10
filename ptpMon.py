@@ -119,7 +119,7 @@ class ptpMon:
 
     def checkEndpoint(self, host, proto):
 
-            endpoint_url = f"{proto}://{host}/cgi-bin/cfgjsonrpc" 
+            endpoint_url = f"{proto}://{host}/cgi-bin/" 
 
             try:
                 r = requests.get(endpoint_url, verify=False, timeout=5)
@@ -132,26 +132,26 @@ class ptpMon:
                     raise requests.exceptions.HTTPError(f"Bad status: {r.status_code}")
 
             except requests.RequestException:
-                # Try the .php endpoint
+                # Try the auth endpoint
                 try:
                     r = requests.head(
-                        f"{proto}://{host}/cgi-bin/cfgjsonrpc.php",
+                        f"{proto}://{host}/v.1.5/php/datas/cfgjsonrpc.php",
                         verify=False,
                         timeout=5
                     )
 
                     if r.ok:
-                        print('.php worked')
-                        return "cfgjsonrpc.php"
+                        print('Using delegate')
+                        return "/v.1.5/php/datas/cfgjsonrpc.php"
 
                     else:
                         raise ConnectionError(
-                            f"Bad status for .php endpoint: {r.status_code}"
+                            f"Bad status for v.1.5 endpoint: {r.status_code}"
                         )
 
                 except requests.RequestException:
                     raise ConnectionError(
-                        f"Could not find valid endpoint on {host}(cfgjsonrpc or cfgjsonrpc.php)."
+                        f"Could not find valid endpoint on {host}(cfgjsonrpc or delegate)."
                     )
 
     def fetch(self, host, proto, endpoint):
@@ -237,12 +237,12 @@ class ptpMon:
 
         try:
             proto = self.checkProto(host)
+            endpoint = self.checkEndpoint(host, proto)
 
-            if self.auth:
+            if endpoint == '/v.1.5/php/datas/cfgjsonrpc.php'
                 results = self.auth_fetch(host, proto)
-            
-            else:
-                endpoint = self.checkEndpoint(host, proto)
+                
+            else: 
                 results = self.fetch(host, proto, endpoint)
 
             for result in results["result"]["parameters"]:
