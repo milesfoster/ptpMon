@@ -14,6 +14,8 @@ class ptpMon:
 
         self.hosts = []
         self.proto = ""
+        self.auth = None
+        self.credentials = None
 
         self.parameters = []
 
@@ -79,6 +81,11 @@ class ptpMon:
 
             if "proto" in key and value:
                 self.proto = value
+            
+            if "credentials" in key and value:
+                self.auth = True
+                self.credentials = value
+
 
         for template in self.importedParams:
 
@@ -190,6 +197,40 @@ class ptpMon:
         except Exception as error:
             return error
 
+
+    def auth_fetch(self, host, proto, endpoint):
+
+        try:
+
+            with requests.Session() as session:
+
+                session.auth = ("root", "evertz")
+
+                payload = {
+                    "jsonrpc": "2.0",
+                    "method": "get",
+                    "params": {"parameters": self.parameters},
+                    "id": 1,
+                }
+
+                url = "%s://%s/cgi-bin/%s" % (proto, host, endpoint)
+                print(url)
+
+                headers = {"Content-type": "application/x-www-form-urlencoded; charset=UTF-8"}
+
+                response = session.post(
+                    url,
+                    headers=headers,
+                    data=json.dumps(payload),
+                    verify=False,
+                    timeout=15.0,
+                )
+                print(response.status_code)
+                return json.loads(response.text)
+
+        except Exception as error:
+            return error
+            
     def parse_results(self, host, collection):
         
         host_instance = {host: {}}
@@ -198,7 +239,12 @@ class ptpMon:
         try:
             proto = self.checkProto(host)
             endpoint = self.checkEndpoint(host, proto)
-            results = self.fetch(host, proto, endpoint)
+
+            if self.auth:
+                results = self.auth_fetch(host, proto, endpoint)
+            
+            else:
+                results = self.fetch(host, proto, endpoint)
 
             for result in results["result"]["parameters"]:
 
@@ -283,7 +329,8 @@ def main():
     params = {"hosts": ["172.17.223.117", "172.17.223.214"],  
               "deviceType": "evIPG",
               "evaluateLeaderEligibility": True,
-              "eligibleRootLeaders": ["MAC-1", "00-02-C5-FF-FE-21-62-0A"]}
+              "eligibleRootLeaders": ["MAC-1", "00-02-C5-FF-FE-21-62-0A"],
+              "credentials" : {"root" : "evertz"}}
 
     collector = ptpMon(**params)
 
