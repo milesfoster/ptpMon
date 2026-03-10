@@ -124,12 +124,13 @@ class ptpMon:
             try:
                 r = requests.get(endpoint_url, verify=False, timeout=5)
 
-                if r.status_code == 200:
+                if r.status_code == 403:
+                    # Direct cgi-bin acccess is blocked on older code
                     return 'cfgjsonrpc'
                 
                 else:
-                    # treat anything else (403/404/etc.) as failure
-                    raise requests.exceptions.HTTPError(f"Bad status: {r.status_code}")
+                    # treat anything else as failure
+                    raise requests.exceptions.HTTPError(f"cfgjsonrpc not supported: {r.status_code}")
 
             except requests.RequestException:
                 # Try the auth endpoint
@@ -329,7 +330,7 @@ def main():
               "deviceType": "evIPG",
               "evaluateLeaderEligibility": True,
               "eligibleRootLeaders": ["MAC-1", "00-02-C5-FF-FE-21-62-0A"],
-               # Enforces auth, only enable if supported/required by device
+               # Optional, but some devices enforce basic auth
               "credentials" : {"root" : "evertz"}}
 
     collector = ptpMon(**params)
