@@ -208,13 +208,14 @@ class ptpMon:
                 # dynamic cgi-bin paths. Original logic depends on the 403 status.
                 r = self.session.get(endpoint_url, timeout=(2, 3), allow_redirects=False)
 
-                if r.status_code == 403:
+                if r.status_code == 404:
+                    n = requests.get(endpoint_url + "/cfgjsonrpc")
+                    if n.status_code == 200:
                     # Direct cgi-bin acccess is blocked on older code
-                    return 'cfgjsonrpc'
+                        return 'cfgjsonrpc'
 
-                else:
-                    # treat anything else as failure
-                    raise requests.exceptions.HTTPError(f"cfgjsonrpc not supported: {r.status_code}")
+                    else:
+                        raise requests.exception.HTTPError("cfgjsonrpc not supported: {n.status_code}")
 
             except requests.RequestException:
                 # Try the auth endpoint
