@@ -290,7 +290,7 @@ class ptpMon:
                 url,
                 headers=headers,
                 data=self.payload_body,
-                auth=("root", "evertz"),
+                auth=next(iter(self.credentials.items())),
                 timeout=(3, 10),
             )
             return json.loads(response.text)
