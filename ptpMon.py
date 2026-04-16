@@ -515,12 +515,12 @@ class ptpMon:
 
 def main():
 
-    params = {"hosts": ["172.17.223.117", "172.17.223.214"],  
+    params = {"hosts": ["172.17.223.17", "172.17.223.18"],  
               "deviceType": "evIPG",
               "evaluateLeaderEligibility": True,
               "eligibleRootLeaders": ["MAC-1", "00-02-C5-FF-FE-21-62-0A"],
                # Optional, but some devices enforce basic auth
-              "credentials" : {"root" : "evertz"}}
+              "credentials" : {"admin" : "admin"}}
 
     collector = ptpMon(**params)
 
