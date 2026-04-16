@@ -217,6 +217,10 @@ class ptpMon:
                     else:
                         raise requests.exception.HTTPError("cfgjsonrpc not supported: {n.status_code}")
 
+                else:
+                    # treat anything else as failure
+                    raise requests.exceptions.HTTPError(f"cfgjsonrpc not supported: {r.status_code}")
+
             except requests.RequestException:
                 # Try the auth endpoint
                 try:
@@ -290,7 +294,7 @@ class ptpMon:
                 url,
                 headers=headers,
                 data=self.payload_body,
-                auth=next(iter(self.credentials.items())),
+                auth=("root", "evertz"),
                 timeout=(3, 10),
             )
             return json.loads(response.text)
