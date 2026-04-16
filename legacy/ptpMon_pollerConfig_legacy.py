@@ -12,12 +12,13 @@ from ptpMon import ptpMon
     # 570EMR-ADMX -> 570admx
     # 9821-AG-HUB -> 9821aghub
     # evIPG-3G -> evIPG
-    # SCORPION-4 -> scorpion4
     # SCORPION-6F -> scorpion6f
     # SCORPION-X18 -> scorpionx18
+    # SCORPION-S4 -> scorpion4
     # sVIP -> svip
     # 570TG-100G -> 570tg
     # evVIP-100G -> vip100g
+
 
 # Set evaluateLeaderEligibility to True or False if you want Root Leader eligibility assessment
 # If evaluateLeaderEligibility is set to true, provide eligible root leaders as they are represented on the host Webeasy
@@ -44,7 +45,7 @@ class Plugin(InsitePlugin):
 
         documents = []
 
-        host_data, perf_doc = self.collector.collect
+        host_data = self.collector.collect
         for host, data in host_data.items():
             if data.get("error"):
                 documents.append({
@@ -65,14 +66,5 @@ class Plugin(InsitePlugin):
                     "status": "success"
                 }
                 documents.append(document)
-
-        # Per-cycle performance telemetry. One doc per cycle, emitted alongside
-        # the per-host ptpStatus docs so it flows through the same Poller ->
-        # Elasticsearch pipeline. Visualize in Kibana to watch cycle_wall_s,
-        # cycle_cpu_s, and the per-host p95/p99 latency trend over time.
-        documents.append({
-            "name": "ptpMonPerf",
-            "fields": perf_doc,
-        })
 
         return json.dumps(documents)

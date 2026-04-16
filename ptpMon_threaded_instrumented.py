@@ -4,11 +4,10 @@ import statistics
 import threading
 import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from threading import Thread
 
 import requests
 import urllib3
-from requests.adapters import HTTPAdapter
 
 try:
     import resource  # POSIX only; absent on Windows dev boxes
@@ -46,7 +45,6 @@ class ptpMon:
         self.proto = ""
         self.auth = None
         self.credentials = None
-        self.max_workers = 100
 
         self.parameters = []
 
@@ -67,10 +65,6 @@ class ptpMon:
 
                     case '570aco':
                         from params.acoParams import params, lookups
-                        print(params, 'imported params')
-
-                    case 'scorpion4':
-                        from params.scorpion4Params import params, lookups
                         print(params, 'imported params')
 
                     case 'scorpion6f':
@@ -121,46 +115,11 @@ class ptpMon:
                 self.auth = True
                 self.credentials = value
 
-            if "maxWorkers" in key and value:
-                self.max_workers = int(value)
-
 
         for template in self.importedParams:
 
             template_copy = copy.deepcopy(template)
             self.parameters.append(template_copy)
-
-        # Pre-serialize the JSON-RPC payload body once. self.parameters never
-        # changes after __init__, so serializing per cycle (800 times per cycle)
-        # was wasted CPU. fetch/auth_fetch send this verbatim.
-        self.payload_body = json.dumps({
-            "jsonrpc": "2.0",
-            "method": "get",
-            "params": {"parameters": self.parameters},
-            "id": 1,
-        })
-
-        # Per-host discovery cache. Populated on first successful probe of a
-        # host, reused on every subsequent cycle. Invalidated on RPC failure
-        # (see parse_results) so a device that's been upgraded/downgraded
-        # self-heals after one failed cycle. Relies on the Plugin instance
-        # staying alive across poll cycles (user-confirmed behavior of the
-        # MAGNUM-Analytics Poller).
-        self.endpoint_cache = {}
-
-        # Single shared requests.Session with a pooled HTTPAdapter. Keep-alive
-        # eliminates the TLS handshake on steady-state cycles; pool sizing
-        # matches max_workers so no worker blocks on an exhausted connection
-        # pool. urllib3 connection pools are thread-safe.
-        self.session = requests.Session()
-        adapter = HTTPAdapter(
-            pool_connections=max(self.max_workers, 32),
-            pool_maxsize=max(self.max_workers, 32),
-            max_retries=0,
-        )
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
-        self.session.verify = False
 
         # Cycle-scoped telemetry containers. These are reset at the start of
         # every collect() call so each cycle's perf doc is independent.
@@ -168,19 +127,16 @@ class ptpMon:
         self._cycle_timings = []
         self._cycle_lock = threading.Lock()
 
-    def checkProto(self, host, timeout=(2, 3)):
+    def checkProto(self, host, timeout=3):
             """
             Determines whether a host supports HTTP or HTTPS by testing HTTP first
             and following redirects. Falls back to HTTPS if HTTP fails completely.
-
-            Uses HEAD so we don't download the login page body just to read the
-            redirected URL. Uses the shared pooled session so this probe benefits
-            from keep-alive when re-probing a flapping host.
             """
             test_url = f"http://{host}"
+            print(test_url)
             try:
                 self._cycle_counter["http_probes"] += 1
-                r = self.session.head(test_url, timeout=timeout, allow_redirects=True)
+                r = requests.get(test_url, timeout=timeout, verify=False, allow_redirects=True)
                 # Check if connection was upgraded
                 if r.url.startswith("https://"):
                     return "https"
@@ -191,7 +147,7 @@ class ptpMon:
             except requests.RequestException:
                 try:
                     self._cycle_counter["http_probes"] += 1
-                    r = self.session.head(f"https://{host}", timeout=timeout)
+                    r = requests.head(f"https://{host}", verify=False, timeout=timeout)
                     if r.ok:
                         return "https"
 
@@ -204,9 +160,7 @@ class ptpMon:
 
             try:
                 self._cycle_counter["http_probes"] += 1
-                # GET (not HEAD) here because some servers return 405 for HEAD on
-                # dynamic cgi-bin paths. Original logic depends on the 403 status.
-                r = self.session.get(endpoint_url, timeout=(2, 3), allow_redirects=False)
+                r = requests.get(endpoint_url, verify=False, timeout=5)
 
                 if r.status_code == 403:
                     # Direct cgi-bin acccess is blocked on older code
@@ -220,12 +174,14 @@ class ptpMon:
                 # Try the auth endpoint
                 try:
                     self._cycle_counter["http_probes"] += 1
-                    r = self.session.head(
+                    r = requests.head(
                         f"{proto}://{host}/v.1.5/php/datas/cfgjsonrpc.php",
-                        timeout=(2, 3),
+                        verify=False,
+                        timeout=5
                     )
 
                     if r.ok:
+                        print('Using delegate')
                         return "/v.1.5/php/datas/cfgjsonrpc.php"
 
                     else:
@@ -241,33 +197,44 @@ class ptpMon:
     def fetch(self, host, proto, endpoint):
 
         try:
-            # Use the shared pooled session. The session_id cookie is read
-            # straight from the Set-Cookie header and sent back via the Cookie
-            # header explicitly — we don't use session.cookies, so there's no
-            # cross-host cookie-jar race even with concurrent workers.
-            self._cycle_counter["http_rpcs"] += 1
-            resp = self.session.get(
-                "%s://%s/login.php" % (proto, host),
-                timeout=(3, 10),
-            )
 
-            session_id = resp.headers["Set-Cookie"].split(";")[0]
+            with requests.Session() as session:
 
-            url = "%s://%s/cgi-bin/%s" % (proto, host, endpoint)
+                ## get the session ID from accessing the login.php site
+                self._cycle_counter["http_rpcs"] += 1
+                resp = session.get(
+                    "%s://%s/login.php" % (proto, host),
+                    verify=False,
+                    timeout=15.0,
+                )
 
-            headers = {
-                "Content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Cookie": session_id + "; webeasy-loggedin=true",
-            }
+                session_id = resp.headers["Set-Cookie"].split(";")[0]
 
-            self._cycle_counter["http_rpcs"] += 1
-            response = self.session.post(
-                url,
-                headers=headers,
-                data=self.payload_body,
-                timeout=(3, 10),
-            )
-            return json.loads(response.text)
+                payload = {
+                    "jsonrpc": "2.0",
+                    "method": "get",
+                    "params": {"parameters": self.parameters},
+                    "id": 1,
+                }
+
+                url = "%s://%s/cgi-bin/%s" % (proto, host, endpoint)
+                print(url)
+
+                headers = {
+                    "Content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Cookie": session_id + "; webeasy-loggedin=true",
+                }
+
+                self._cycle_counter["http_rpcs"] += 1
+                response = session.post(
+                    url,
+                    headers=headers,
+                    data=json.dumps(payload),
+                    verify=False,
+                    timeout=15.0,
+                )
+                print(response.status_code)
+                return json.loads(response.text)
 
         except Exception as error:
             return error
@@ -276,23 +243,32 @@ class ptpMon:
     def auth_fetch(self, host, proto):
 
         try:
-            # Pass auth per-request, NOT via session.auth. session.auth is a
-            # single mutable property on the shared session — setting it from
-            # multiple workers concurrently would race. Per-request auth is
-            # thread-safe. Credentials match the original hardcoded values.
-            url = "%s://%s/v.1.5/php/datas/cfgjsonrpc.php" % (proto, host)
 
-            headers = {"Content-type": "application/x-www-form-urlencoded; charset=UTF-8"}
+            with requests.Session() as session:
 
-            self._cycle_counter["http_rpcs"] += 1
-            response = self.session.post(
-                url,
-                headers=headers,
-                data=self.payload_body,
-                auth=("root", "evertz"),
-                timeout=(3, 10),
-            )
-            return json.loads(response.text)
+                session.auth = ("root", "evertz")
+
+                payload = {
+                    "jsonrpc": "2.0",
+                    "method": "get",
+                    "params": {"parameters": self.parameters},
+                    "id": 1,
+                }
+
+                url = "%s://%s/v.1.5/php/datas/cfgjsonrpc.php" % (proto, host)
+
+                headers = {"Content-type": "application/x-www-form-urlencoded; charset=UTF-8"}
+
+                self._cycle_counter["http_rpcs"] += 1
+                response = session.post(
+                    url,
+                    headers=headers,
+                    data=json.dumps(payload),
+                    verify=False,
+                    timeout=15.0,
+                )
+                print(response.status_code)
+                return json.loads(response.text)
 
         except Exception as error:
             return error
@@ -306,29 +282,15 @@ class ptpMon:
         # doc reflects the real distribution including slow failures.
         host_start = time.perf_counter()
         proto_ms = endpoint_ms = rpc_ms = parse_ms = 0.0
-        cache_hit = False
 
         try:
-            # Endpoint discovery cache: if we've successfully talked to this
-            # host before, skip the two discovery probes entirely. On failure
-            # further down, we invalidate for next cycle (no in-cycle retry so
-            # one dead host can't consume a 30s cadence budget twice).
-            cached = self.endpoint_cache.get(host)
-            if cached is not None:
-                proto, endpoint = cached
-                cache_hit = True
-                self._cycle_counter["cache_hits"] += 1
-            else:
-                t0 = time.perf_counter()
-                proto = self.checkProto(host)
-                proto_ms = (time.perf_counter() - t0) * 1000.0
+            t0 = time.perf_counter()
+            proto = self.checkProto(host)
+            proto_ms = (time.perf_counter() - t0) * 1000.0
 
-                t0 = time.perf_counter()
-                endpoint = self.checkEndpoint(host, proto)
-                endpoint_ms = (time.perf_counter() - t0) * 1000.0
-
-                self.endpoint_cache[host] = (proto, endpoint)
-                self._cycle_counter["cache_misses"] += 1
+            t0 = time.perf_counter()
+            endpoint = self.checkEndpoint(host, proto)
+            endpoint_ms = (time.perf_counter() - t0) * 1000.0
 
             t0 = time.perf_counter()
             if endpoint == '/v.1.5/php/datas/cfgjsonrpc.php':
@@ -381,12 +343,6 @@ class ptpMon:
             hosts["error"] = str(e)
             collection.update(host_instance)
             self._cycle_counter["errors"] += 1
-            # If the failure happened on a cached endpoint, the cache entry may
-            # be stale (device upgraded/downgraded). Drop it so next cycle
-            # re-probes. We do NOT retry in-cycle — that would double the
-            # worst-case time budget for dead hosts and blow the cadence.
-            if cache_hit:
-                self.endpoint_cache.pop(host, None)
 
         finally:
             total_ms = (time.perf_counter() - host_start) * 1000.0
@@ -418,15 +374,6 @@ class ptpMon:
 
         collection = {}
 
-        # Capacity guardrail: if workers would each serve more than ~8 hosts
-        # sequentially (per cycle), warn the operator. Raising max_workers or
-        # lowering cadence is the fix.
-        if self.hosts and len(self.hosts) > self.max_workers * 8:
-            print(
-                "ptpMon WARNING: %d hosts with max_workers=%d — consider raising "
-                "max_workers via params['maxWorkers']." % (len(self.hosts), self.max_workers)
-            )
-
         wall_start = time.perf_counter()
         cpu_start = time.process_time()
         if _HAVE_RUSAGE:
@@ -434,15 +381,22 @@ class ptpMon:
         else:
             ru_start = None
 
-        if self.hosts:
-            # ThreadPoolExecutor replaces the old 1-thread-per-host model.
-            # Bounded concurrency caps the simultaneous TLS-handshake load and
-            # keeps the process's OS-thread count predictable cycle-over-cycle.
-            with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
-                # list(...) forces iteration so exceptions inside parse_results
-                # (which are caught internally anyway) don't leave lingering
-                # futures; the `with` block joins all workers on exit.
-                list(ex.map(lambda h: self.parse_results(h, collection), self.hosts))
+        threads = [
+            Thread(
+                target=self.parse_results,
+                args=(
+                    host,
+                    collection,
+                ),
+            )
+            for host in self.hosts
+        ]
+
+        for x in threads:
+            x.start()
+
+        for y in threads:
+            y.join()
 
         cycle_wall_s = time.perf_counter() - wall_start
         cycle_cpu_s = time.process_time() - cpu_start
@@ -473,12 +427,9 @@ class ptpMon:
             "per_host_rpc_ms_p95": round(_quantile(rpcs, 95), 2),
             "per_host_proto_ms_p95": round(_quantile(protos, 95), 2),
             "per_host_endpoint_ms_p95": round(_quantile(endpoints, 95), 2),
-            "endpoint_cache_hit_ratio": (
-                self._cycle_counter.get("cache_hits", 0)
-                / max(1, self._cycle_counter.get("cache_hits", 0)
-                         + self._cycle_counter.get("cache_misses", 0))
-            ),
-            "endpoint_cache_size": len(self.endpoint_cache),
+            # endpoint_cache_hit_ratio is Phase 1 territory; emitted as 0.0
+            # here so the Kibana field mapping is consistent across A/B.
+            "endpoint_cache_hit_ratio": 0.0,
         }
 
         if _HAVE_RUSAGE and ru_start is not None:
