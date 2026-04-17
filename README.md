@@ -94,6 +94,48 @@ if __name__ == "__main__":
 
 ```
 
+## Performance Metrics
+
+ptpMon emits a `ptpMonPerf` document alongside the `ptpStatus` documents each poll cycle. These metrics are indexed into Elasticsearch and can be visualized in Kibana to monitor poller health.
+
+### Cycle-Level Metrics
+
+| Metric | Description |
+|---|---|
+| `cycle_wall_s` | Total elapsed (real-world) time for the poll cycle in seconds. This is the start-to-finish duration including all network waiting, thread scheduling, and processing. If this approaches your poll cadence (e.g. 30s), the poller cannot keep up. |
+| `cycle_cpu_s` | CPU time consumed by the poll cycle in seconds. This counts only time the processor was actively doing work — it excludes time spent waiting on network I/O. A large gap between `cycle_wall_s` and `cycle_cpu_s` indicates the cycle is I/O-bound (expected). |
+| `cycle_user_s` | User-space CPU time (subset of `cycle_cpu_s`). Time spent in Python code, JSON parsing, and TLS processing. |
+| `cycle_sys_s` | Kernel CPU time (subset of `cycle_cpu_s`). Time spent in system calls — socket operations, thread scheduling. |
+| `peak_rss_kb` | Peak resident set size (memory) of the poller process in kilobytes. Watch for steady growth across cycles, which would indicate a memory leak. |
+| `active_threads` | Number of active threads at cycle end. Should stay near `max_workers` and not grow cycle-over-cycle. |
+
+### Request Counters
+
+| Metric | Description |
+|---|---|
+| `http_probes` | Number of HTTP discovery requests (protocol detection + endpoint detection) made during the cycle. On the first cycle this will be ~2× the host count. On subsequent cycles with a warm endpoint cache, this should drop to near zero. |
+| `http_rpcs` | Number of JSON-RPC data requests made during the cycle. This is always equal to the host count — one RPC per host per cycle. |
+| `errors` | Number of hosts that returned an error during the cycle. |
+| `endpoint_cache_hit_ratio` | Fraction of hosts that used cached endpoint discovery results (0.0 to 1.0). Should reach 1.0 by cycle 2 under normal conditions. A drop indicates hosts changed protocol/endpoint or were evicted from the cache due to errors. |
+
+### Per-Host Latency Percentiles
+
+These break down where time is spent per host, aggregated across all hosts in the cycle. Percentile values (p50, p95, p99, max) are reported in milliseconds.
+
+| Metric | Description |
+|---|---|
+| `per_host_total_ms` | Total time to poll a single host (probe + RPC + parse). The p95 value is the most useful for capacity planning — it represents the typical worst-case per-host cost. |
+| `per_host_proto_ms` | Time spent detecting whether the host uses HTTP or HTTPS. Zero on cache-warm cycles. |
+| `per_host_endpoint_ms` | Time spent discovering whether the host uses `/cfgjsonrpc` or `/delegate`. Zero on cache-warm cycles. |
+| `per_host_rpc_ms` | Time spent on the actual JSON-RPC data request. This is the irreducible cost per host — it cannot be cached or eliminated. |
+
+### Interpreting the Metrics
+
+- **Healthy steady state:** `endpoint_cache_hit_ratio` at 1.0, `http_probes` near 0, `cycle_wall_s` well under your poll cadence.
+- **First cycle after restart:** `endpoint_cache_hit_ratio` will be 0.0 and `http_probes` will be high as the cache is cold. This is expected — performance should stabilize by cycle 2.
+- **CPU saturation warning:** If `cycle_cpu_s` approaches `cycle_wall_s`, the poller is CPU-bound rather than I/O-bound. Consider reducing `maxWorkers` or splitting the host list across multiple pollers.
+- **Cadence pressure:** If `cycle_wall_s` approaches the poll interval (e.g. 30s), the poller cannot complete a cycle before the next one is due. Check `per_host_rpc_ms_p95` for slow hosts or increase `maxWorkers`.
+
 ## Roadmap
 
 - [ ] Include Kibana Objects for import

@@ -269,7 +269,7 @@ class ptpMon:
                     if "grandmaster_identity" in result["name"]:
                         hosts.update(
                             {
-                                "b_followingEligibleRootLeader": "True" if result["value"] in self.eligibleLeaders else "False"
+                                "b_followingEligibleRootLeader": True if result["value"] in self.eligibleLeaders else False
                             }
                         )
 

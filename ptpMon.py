@@ -294,7 +294,7 @@ class ptpMon:
                 url,
                 headers=headers,
                 data=self.payload_body,
-                auth=("root", "evertz"),
+                auth=next(iter(self.credentials.items())),
                 timeout=(3, 10),
             )
             return json.loads(response.text)
@@ -359,7 +359,7 @@ class ptpMon:
                     if "grandmaster_identity" in result["name"]:
                         hosts.update(
                             {
-                                "b_followingEligibleRootLeader": "True" if result["value"] in self.eligibleLeaders else "False"
+                                "b_followingEligibleRootLeader": True if result["value"] in self.eligibleLeaders else False
                             }
                         )
 
@@ -377,7 +377,7 @@ class ptpMon:
                     # hosts["as_ids"].append(result["id"])
 
             if hosts.get("ptp_status") != "Converged":
-                hosts.update({"b_followingEligibleRootLeader": "False"})
+                hosts.update({"b_followingEligibleRootLeader": False})
 
             parse_ms = (time.perf_counter() - t0) * 1000.0
             collection.update(host_instance)

@@ -38,7 +38,8 @@ class Plugin(InsitePlugin):
             params = {"hosts": hosts,
                       "deviceType": "570aco",
                       "evaluateLeaderEligibility": True,
-                      "eligibleRootLeaders": ["MAC-ADDRESS-1", "MAC-ADDRESS-2"]}
+                      "eligibleRootLeaders": ["MAC-ADDRESS-1", "MAC-ADDRESS-2"],
+                      "credentials": {"admin": "admin"}}
 
             self.collector = ptpMon(**params)
 
@@ -71,6 +72,7 @@ class Plugin(InsitePlugin):
         # Elasticsearch pipeline. Visualize in Kibana to watch cycle_wall_s,
         # cycle_cpu_s, and the per-host p95/p99 latency trend over time.
         documents.append({
+            "host": "ptpMon",
             "name": "ptpMonPerf",
             "fields": perf_doc,
         })
