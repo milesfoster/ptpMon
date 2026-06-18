@@ -29,14 +29,13 @@ The following devices are currently supported with the following arg names:
     ```sh
     cp ptpMon.py /opt/evertz/insite/parasite/applications/pll-1/data/python/modules
     ```
-    NOTE: If the directory does not exist, first configure an empty Python poller in the poller you are trying to add to. This will force the above directory to be created.
+**    NOTE:**
+      If the directory does not exist, first configure an empty Python poller in the poller you are trying to add to.
+      This will force the above directory to be created.
 
-2. Copy the params folder to the same location as Step 1.
+3. Copy the params folder to the same location as Step 1.
 
-3. Restart the poller application
-   ```sh
-   git clone https://github.com/github_username/repo_name.git
-   ```
+4. Restart the poller application
 
 
 ### Configuration
