@@ -134,6 +134,15 @@ Each entry maps one device's MAC addresses to a display name, a group, and a rol
 
 To add or change a device, add a new entry (or edit an existing one) following the pattern above, then re-import the updated `.ndjson` via **Stack Management > Saved Objects** (or save directly from the Vega editor).
 
+### Additional Data Sources for the Visualization
+
+Beyond the `ptpStatus` documents emitted by this poller, the visualization enriches the clock nodes with port-state data from a separate index. This data source is optional — the topology renders without it — but it is required to display per-port status on the clock tooltips.
+
+- **Index:** `log-metric-p-msc-*`
+- **Fields:** `msc.snmp.s_port_1_state` through `msc.snmp.s_port_4_state` (ports 1–4)
+
+These documents must be ingested into Elasticsearch (e.g. via a poller collecting MSC SNMP port states) and keyed by device name so the visualization can join them to the matching clock node. When present, hovering over a clock displays the state of each of its four ports in the tooltip. If the index is absent or a device has no matching document, the topology still renders and the tooltip simply omits or shows no data for the port rows.
+
 ## Performance Metrics
 
 ptpMon emits a `ptpMonPerf` document alongside the `ptpStatus` documents each poll cycle. These metrics are indexed into Elasticsearch and can be visualized in Kibana to monitor poller health.
