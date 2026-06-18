@@ -94,6 +94,19 @@ if __name__ == "__main__":
 
 ```
 
+## PTP Topology Visualization
+
+The `visualizations/ptp-vis.ndjson` file contains a Kibana Vega visualization that renders the PTP synchronization topology as an interactive tree — grandmasters at the top, branching down through boundary clocks/masters to their slaves. It is driven by the `ptpStatus` documents this poller emits, so it gives an at-a-glance view of sync health across the fleet.
+
+![PTP Topology visualization in Kibana](screenshots/kibana-ptp-topology.png)
+
+### Importing the Visualization
+
+1. In Kibana, open **Stack Management > Saved Objects**.
+2. Click **Import**.
+3. Select the `visualizations/ptp-vis.ndjson` file.
+4. Confirm the import. The visualization will appear in your Saved Objects list and can be opened or added to a dashboard.
+
 ## Performance Metrics
 
 ptpMon emits a `ptpMonPerf` document alongside the `ptpStatus` documents each poll cycle. These metrics are indexed into Elasticsearch and can be visualized in Kibana to monitor poller health.
@@ -135,8 +148,3 @@ These break down where time is spent per host, aggregated across all hosts in th
 - **First cycle after restart:** `endpoint_cache_hit_ratio` will be 0.0 and `http_probes` will be high as the cache is cold. This is expected — performance should stabilize by cycle 2.
 - **CPU saturation warning:** If `cycle_cpu_s` approaches `cycle_wall_s`, the poller is CPU-bound rather than I/O-bound. Consider reducing `maxWorkers` or splitting the host list across multiple pollers.
 - **Cadence pressure:** If `cycle_wall_s` approaches the poll interval (e.g. 30s), the poller cannot complete a cycle before the next one is due. Check `per_host_rpc_ms_p95` for slow hosts or increase `maxWorkers`.
-
-## Roadmap
-
-- [ ] Include Kibana Objects for import
-- [ ] Add additional device types

@@ -47,6 +47,8 @@ class ptpMon:
         self.auth = None
         self.credentials = None
         self.max_workers = 100
+        self.evalEligibility = False
+        self.eligibleLeaders = []
 
         self.parameters = []
 
@@ -108,8 +110,8 @@ class ptpMon:
                 self.importedParams = params
                 self.importedLookups = lookups
 
-            if "evaluateLeaderEligibility" in key and value:
-                self.evalEligibility = value
+            if "evaluateLeaderEligibility" in key:
+                self.evalEligibility = bool(value)
 
             if "eligibleRootLeaders" in key and value:
                 self.eligibleLeaders = value
@@ -199,30 +201,23 @@ class ptpMon:
                     raise ConnectionError(f"Could not connect to {host} using HTTP or HTTPS.")
 
     def checkEndpoint(self, host, proto):
-
-            endpoint_url = f"{proto}://{host}/cgi-bin/"
-
+            # Probe the cfgjsonrpc endpoint directly rather than gating on the
+            # /cgi-bin/ directory response — different device generations return
+            # 404 vs 200 for the directory even when cfgjsonrpc itself works, so
+            # the directory status is not a reliable gate.
             try:
                 self._cycle_counter["http_probes"] += 1
-                # GET (not HEAD) here because some servers return 405 for HEAD on
-                # dynamic cgi-bin paths. Original logic depends on the 403 status.
-                r = self.session.get(endpoint_url, timeout=(2, 3), allow_redirects=False)
-
-                if r.status_code == 404:
-                    n = requests.get(endpoint_url + "/cfgjsonrpc")
-                    if n.status_code == 200:
-                    # Direct cgi-bin acccess is blocked on older code
-                        return 'cfgjsonrpc'
-
-                    else:
-                        raise requests.exception.HTTPError("cfgjsonrpc not supported: {n.status_code}")
-
-                else:
-                    # treat anything else as failure
-                    raise requests.exceptions.HTTPError(f"cfgjsonrpc not supported: {r.status_code}")
+                n = self.session.get(
+                    f"{proto}://{host}/cgi-bin/cfgjsonrpc",
+                    timeout=(2, 3),
+                )
+                if n.status_code == 200:
+                    return "cfgjsonrpc"
+                raise requests.exceptions.HTTPError(
+                    f"cfgjsonrpc not supported: {n.status_code}"
+                )
 
             except requests.RequestException:
-                # Try the auth endpoint
                 try:
                     self._cycle_counter["http_probes"] += 1
                     r = self.session.head(
@@ -233,75 +228,72 @@ class ptpMon:
                     if r.ok:
                         return "/v.1.5/php/datas/cfgjsonrpc.php"
 
-                    else:
-                        raise ConnectionError(
-                            f"Bad status for v.1.5 endpoint: {r.status_code}"
-                        )
+                    raise ConnectionError(
+                        f"Bad status for v.1.5 endpoint: {r.status_code}"
+                    )
 
                 except requests.RequestException:
                     raise ConnectionError(
-                        f"Could not find valid endpoint on {host}(cfgjsonrpc or delegate)."
+                        f"Could not find valid endpoint on {host} (cfgjsonrpc or delegate)."
                     )
 
     def fetch(self, host, proto, endpoint):
 
-        try:
-            # Use the shared pooled session. The session_id cookie is read
-            # straight from the Set-Cookie header and sent back via the Cookie
-            # header explicitly — we don't use session.cookies, so there's no
-            # cross-host cookie-jar race even with concurrent workers.
-            self._cycle_counter["http_rpcs"] += 1
-            resp = self.session.get(
-                "%s://%s/login.php" % (proto, host),
-                timeout=(3, 10),
-            )
+        # Use the shared pooled session. The session_id cookie is read
+        # straight from the Set-Cookie header and sent back via the Cookie
+        # header explicitly — we don't use session.cookies, so there's no
+        # cross-host cookie-jar race even with concurrent workers.
+        # Exceptions propagate to parse_results' outer handler so the real
+        # cause (timeout, missing Set-Cookie, bad JSON body) reaches the
+        # per-host error field instead of a masked TypeError from the caller
+        # subscripting a returned exception object.
+        self._cycle_counter["http_rpcs"] += 1
+        resp = self.session.get(
+            "%s://%s/login.php" % (proto, host),
+            timeout=(3, 10),
+        )
 
-            session_id = resp.headers["Set-Cookie"].split(";")[0]
+        session_id = resp.headers["Set-Cookie"].split(";")[0]
 
-            url = "%s://%s/cgi-bin/%s" % (proto, host, endpoint)
+        url = "%s://%s/cgi-bin/%s" % (proto, host, endpoint)
 
-            headers = {
-                "Content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Cookie": session_id + "; webeasy-loggedin=true",
-            }
+        headers = {
+            "Content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Cookie": session_id + "; webeasy-loggedin=true",
+        }
 
-            self._cycle_counter["http_rpcs"] += 1
-            response = self.session.post(
-                url,
-                headers=headers,
-                data=self.payload_body,
-                timeout=(3, 10),
-            )
-            return json.loads(response.text)
-
-        except Exception as error:
-            return error
+        self._cycle_counter["http_rpcs"] += 1
+        response = self.session.post(
+            url,
+            headers=headers,
+            data=self.payload_body,
+            timeout=(3, 10),
+        )
+        return json.loads(response.text)
 
 
     def auth_fetch(self, host, proto):
 
-        try:
-            # Pass auth per-request, NOT via session.auth. session.auth is a
-            # single mutable property on the shared session — setting it from
-            # multiple workers concurrently would race. Per-request auth is
-            # thread-safe. Credentials match the original hardcoded values.
-            url = "%s://%s/v.1.5/php/datas/cfgjsonrpc.php" % (proto, host)
+        # Pass auth per-request, NOT via session.auth. session.auth is a
+        # single mutable property on the shared session — setting it from
+        # multiple workers concurrently would race. Per-request auth is
+        # thread-safe. Credentials match the original hardcoded values.
+        # Exceptions propagate to parse_results' outer handler.
+        url = "%s://%s/v.1.5/php/datas/cfgjsonrpc.php" % (proto, host)
 
-            headers = {"Content-type": "application/x-www-form-urlencoded; charset=UTF-8"}
+        headers = {"Content-type": "application/x-www-form-urlencoded; charset=UTF-8"}
 
-            self._cycle_counter["http_rpcs"] += 1
-            response = self.session.post(
-                url,
-                headers=headers,
-                data=self.payload_body,
-                auth=next(iter(self.credentials.items())),
-                timeout=(3, 10),
-            )
-            return json.loads(response.text)
+        self._cycle_counter["http_rpcs"] += 1
+        response = self.session.post(
+            url,
+            headers=headers,
+            data=self.payload_body,
+            auth=next(iter(self.credentials.items())),
+            timeout=(3, 10),
+        )
+        return json.loads(response.text)
 
-        except Exception as error:
-            return error
-            
+
     def parse_results(self, host, collection):
 
         host_instance = {host: {}}
@@ -376,7 +368,7 @@ class ptpMon:
                     hosts.update({result["name"]: result["value"]})
                     # hosts["as_ids"].append(result["id"])
 
-            if hosts.get("ptp_status") != "Converged":
+            if self.evalEligibility and hosts.get("ptp_status") != "Converged":
                 hosts.update({"b_followingEligibleRootLeader": False})
 
             parse_ms = (time.perf_counter() - t0) * 1000.0

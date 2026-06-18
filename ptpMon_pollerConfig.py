@@ -39,7 +39,9 @@ class Plugin(InsitePlugin):
                       "deviceType": "570aco",
                       "evaluateLeaderEligibility": True,
                       "eligibleRootLeaders": ["MAC-ADDRESS-1", "MAC-ADDRESS-2"],
-                      "credentials": {"admin": "admin"}}
+                      "credentials": {"admin": "admin"},
+                      "maxWorkers": 100
+            }
 
             self.collector = ptpMon(**params)
 
