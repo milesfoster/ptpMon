@@ -106,6 +106,34 @@ The `visualizations/ptp-vis.ndjson` file contains a Kibana Vega visualization th
 3. Select the `visualizations/ptp-vis.ndjson` file.
 4. Confirm the import. The visualization will appear in your Saved Objects list and can be opened or added to a dashboard.
 
+### Editing the Visualization
+
+Devices that should appear as fixed nodes in the topology (grandmasters and master/boundary clocks) are defined in the `manual_names` data block inside the Vega spec. You can edit this block in one of two places:
+
+- **Before import:** open `visualizations/ptp-vis.ndjson` in a text editor and locate the `manual_names` `values` array.
+- **In Kibana:** open the visualization, switch to the Vega editor panel, and find the `manual_names` data block in the spec.
+
+Each entry maps one device's MAC addresses to a display name, a group, and a role:
+
+```json
+{
+  "ids": [
+    { "mac": "00-02-C5-FF-FE-24-0B-3C", "side": "RED" },
+    { "mac": "00-02-C5-FF-FE-24-0B-3D", "side": "BLUE" }
+  ],
+  "name": "7N.MSC.003.GM.A",
+  "group_id": "GM",
+  "role": "grandmaster"
+}
+```
+
+- **`ids`** — the device's clock identity MAC addresses. List one object per fabric, tagging each with `"side": "RED"` or `"side": "BLUE"` so the topology can color edges by fabric. A device with only one side simply lists one entry.
+- **`name`** — the display name shown on the node (e.g. `7N.MSC.003.GM.A`).
+- **`group_id`** — groups related devices together in the layout (e.g. all grandmasters share `"GM"`; a RED/BLUE master pair shares the same group).
+- **`role`** — the device's position in the topology: `"grandmaster"` for top-level clocks or `"master"` for boundary clocks. Devices not listed here are placed automatically as slaves under the master they report.
+
+To add or change a device, add a new entry (or edit an existing one) following the pattern above, then re-import the updated `.ndjson` via **Stack Management > Saved Objects** (or save directly from the Vega editor).
+
 ## Performance Metrics
 
 ptpMon emits a `ptpMonPerf` document alongside the `ptpStatus` documents each poll cycle. These metrics are indexed into Elasticsearch and can be visualized in Kibana to monitor poller health.
