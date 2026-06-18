@@ -110,8 +110,8 @@ The `visualizations/ptp-vis.ndjson` file contains a Kibana Vega visualization th
 
 Devices that should appear as fixed nodes in the topology (grandmasters and master/boundary clocks) are defined in the `manual_names` data block inside the Vega spec. You can edit this block in one of two places:
 
+- **In Kibana (Recommended):** open the visualization, switch to the Vega editor panel, and find the `manual_names` data block in the spec.
 - **Before import:** open `visualizations/ptp-vis.ndjson` in a text editor and locate the `manual_names` `values` array.
-- **In Kibana:** open the visualization, switch to the Vega editor panel, and find the `manual_names` data block in the spec.
 
 Each entry maps one device's MAC addresses to a display name, a group, and a role:
 
