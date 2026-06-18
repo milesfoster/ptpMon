@@ -143,6 +143,17 @@ Beyond the `ptpStatus` documents emitted by this poller, the visualization enric
 
 These documents must be ingested into Elasticsearch (e.g. via a poller collecting MSC SNMP port states) and keyed by device name so the visualization can join them to the matching clock node. When present, hovering over a clock displays the state of each of its four ports in the tooltip. If the index is absent or a device has no matching document, the topology still renders and the tooltip simply omits or shows no data for the port rows.
 
+The port-state fields are populated by polling the following SNMP OIDs (ports 1–4):
+
+![MSC port-state SNMP OIDs](screenshots/msc-oids.PNG)
+
+| Field | OID |
+|---|---|
+| `msc.snmp.s_port_1_state` | `1.3.6.1.4.1.6827.50.338.3.2.1.2.1.1` |
+| `msc.snmp.s_port_2_state` | `1.3.6.1.4.1.6827.50.338.3.2.1.2.2.1` |
+| `msc.snmp.s_port_3_state` | `1.3.6.1.4.1.6827.50.338.3.2.1.2.3.1` |
+| `msc.snmp.s_port_4_state` | `1.3.6.1.4.1.6827.50.338.3.2.1.2.4.1` |
+
 ## Performance Metrics
 
 ptpMon emits a `ptpMonPerf` document alongside the `ptpStatus` documents each poll cycle. These metrics are indexed into Elasticsearch and can be visualized in Kibana to monitor poller health.
