@@ -29,13 +29,13 @@ The following devices are currently supported with the following arg names:
     ```sh
     cp ptpMon.py /opt/evertz/insite/parasite/applications/pll-1/data/python/modules
     ```
-**NOTE:**
+    **NOTE:**
       If the directory does not exist, first configure an empty Python poller in the poller you are trying to add to.
       This will force the above directory to be created.
 
-3. Copy the params folder to the same location as Step 1.
+2. Copy the params folder to the same location as Step 1.
 
-4. Restart the poller application
+3. Restart the poller application
 
 
 ### Configuration
