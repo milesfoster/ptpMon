@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
 ## PTP Topology Visualization
 
-The `visualizations/ptp-vis.ndjson` file contains a Kibana Vega visualization that renders the PTP synchronization topology as an interactive tree — grandmasters at the top, branching down through boundary clocks/masters to their slaves. It is driven by the `ptpStatus` documents this poller emits, so it gives an at-a-glance view of sync health across the fleet.
+The `visualizations/ptp-vis.ndjson` file contains a Kibana Vega visualization that renders the PTP synchronization topology as an interactive tree — grandmasters at the top, branching down through boundary clocks/masters to their slaves. It is driven by the `ptpStatus` documents this poller emits, giving an overall view of timing architecture health.
 
 ![PTP Topology visualization in Kibana](screenshots/kibana-ptp-topology.png)
 
