@@ -46,25 +46,25 @@ _SYNCED_PTP_STATES = {"Converged", "Locked"}
 
 # deviceType -> params module
 
-# To add a device: drop a params/<name>Params.py file and add one entry below.
+# To add a device: drop a params/<name>.py file and add one entry below.
 _DEVICE_MODULES = {
-    "evIPG":       "params.evipgParams",
-    "570ipg":      "params.ipgParams",
-    "570aco":      "params.acoParams",
-    "scorpion4":   "params.scorpion4Params",
-    "scorpion6f":  "params.scorpion6fParams",
-    "scorpionx18": "params.scorpionx18Params",
-    "mio-ipg-fs": "params.mioIpgParams",
+    "evIPG":       "params.evipg",
+    "570ipg":      "params.ipg",
+    "570aco":      "params.aco",
+    "scorpion4":   "params.scorpion4",
+    "scorpion6f":  "params.scorpion6f",
+    "scorpionx18": "params.scorpionx18",
+    "mio-ipg-fs": "params.mioIpg",
     "mio-dante": "params.mioDante",
     "mio-hdmi-2": "params.mioHdmi2",
     "mio-hdmi-out1": "params.mioHdmiOut1",
-    
-    "570j2k":      "params.j2kParams",
-    "vip100g":     "params.vip100gParams",
-    "svip":        "params.svipParams",
-    "570tg":       "params.tgParams",
-    "570admx":     "params.admxParams",
-    "9821aghub":   "params.aghubParams",
+    "mio-ptp": "params.mioPtp",
+    "570j2k":      "params.j2k",
+    "vip100g":     "params.vip100g",
+    "svip":        "params.svip",
+    "570tg":       "params.tg",
+    "570admx":     "params.admx",
+    "9821aghub":   "params.aghub",
 }
 
 
@@ -78,6 +78,7 @@ class ptpMon:
         self.max_workers = 100
         self.evalEligibility = False
         self.eligibleLeaders = []
+        self.dualGm = None
 
         self.parameters = []
 
@@ -96,6 +97,9 @@ class ptpMon:
                 module = importlib.import_module(module_name)
                 self.importedParams = module.params
                 self.importedLookups = module.lookups
+                # Optional per-device dual-grandmaster selection config. None for
+                # single-GM devices, so parse_results' selection step is skipped.
+                self.dualGm = getattr(module, "dual_gm", None)
 
             if "evaluateLeaderEligibility" in key:
                 self.evalEligibility = bool(value)
@@ -323,18 +327,26 @@ class ptpMon:
             rpc_ms = (time.perf_counter() - t0) * 1000.0
 
             t0 = time.perf_counter()
+            # Raw (pre-lookup) active_ptp value, used by the dual-GM selection
+            # step below to choose which port's grandmaster is canonical. 0 means
+            # no locked port and falls through to "N/A".
+            raw_active_ptp = 0
             for result in results["result"]["parameters"]:
 
                 # perform lookup for playout status enumeration
                 if "active_ptp" in result["name"]:
+                    raw_active_ptp = result["value"]  # capture RAW int before lookup
                     result["value"] = self.importedLookups[0][result["value"]]
 
                 # perform lookup for link select enumeration
                 elif "ptp_status" in result["name"]:
                     result["value"] = self.importedLookups[1][result["value"]]
 
-                # evaluate if root leader is part of the provided eligible list
-                if self.evalEligibility:
+                # evaluate if root leader is part of the provided eligible list.
+                # Skipped for dual-GM devices (both port GM names contain the
+                # "grandmaster_identity" substring, so this would double-fire);
+                # eligibility for those is computed in the selection step below.
+                if self.evalEligibility and not self.dualGm:
                     if "grandmaster_identity" in result["name"]:
                         hosts.update(
                             {
@@ -354,6 +366,16 @@ class ptpMon:
 
                     hosts.update({result["name"]: result["value"]})
                     # hosts["as_ids"].append(result["id"])
+
+            # Dual-grandmaster devices report a GM per port; select the one on the
+            # active port as the canonical s_grandmaster_identity (the field the
+            # downstream topology reads). The per-port GMs remain in the output.
+            if self.dualGm:
+                field = self.dualGm["ports"].get(raw_active_ptp)
+                current_gm = hosts.get(field, "N/A") if field else "N/A"
+                hosts[self.dualGm["canonical"]] = current_gm
+                if self.evalEligibility:
+                    hosts["b_followingEligibleRootLeader"] = current_gm in self.eligibleLeaders
 
             if self.evalEligibility and hosts.get("ptp_status") not in _SYNCED_PTP_STATES:
                 hosts.update({"b_followingEligibleRootLeader": False})
