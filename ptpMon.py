@@ -40,6 +40,10 @@ def _quantile(values, q):
         return max(values)
 
 
+# ptp_status values that count as "synced" for leader-eligibility.
+_SYNCED_PTP_STATES = {"Converged", "Locked"}
+
+
 # deviceType -> params module
 
 # To add a device: drop a params/<name>Params.py file and add one entry below.
@@ -50,6 +54,11 @@ _DEVICE_MODULES = {
     "scorpion4":   "params.scorpion4Params",
     "scorpion6f":  "params.scorpion6fParams",
     "scorpionx18": "params.scorpionx18Params",
+    "mio-ipg-fs": "params.mioIpgParams",
+    "mio-dante": "params.mioDante",
+    "mio-hdmi-2": "params.mioHdmi2",
+    "mio-hdmi-out1": "params.mioHdmiOut1",
+    
     "570j2k":      "params.j2kParams",
     "vip100g":     "params.vip100gParams",
     "svip":        "params.svipParams",
@@ -346,7 +355,7 @@ class ptpMon:
                     hosts.update({result["name"]: result["value"]})
                     # hosts["as_ids"].append(result["id"])
 
-            if self.evalEligibility and hosts.get("ptp_status") != "Converged":
+            if self.evalEligibility and hosts.get("ptp_status") not in _SYNCED_PTP_STATES:
                 hosts.update({"b_followingEligibleRootLeader": False})
 
             parse_ms = (time.perf_counter() - t0) * 1000.0
