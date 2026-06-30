@@ -1,4 +1,5 @@
 import copy
+import importlib
 import json
 import statistics
 import threading
@@ -39,6 +40,25 @@ def _quantile(values, q):
         return max(values)
 
 
+# deviceType -> params module
+
+# To add a device: drop a params/<name>Params.py file and add one entry below.
+_DEVICE_MODULES = {
+    "evIPG":       "params.evipgParams",
+    "570ipg":      "params.ipgParams",
+    "570aco":      "params.acoParams",
+    "scorpion4":   "params.scorpion4Params",
+    "scorpion6f":  "params.scorpion6fParams",
+    "scorpionx18": "params.scorpionx18Params",
+    "570j2k":      "params.j2kParams",
+    "vip100g":     "params.vip100gParams",
+    "svip":        "params.svipParams",
+    "570tg":       "params.tgParams",
+    "570admx":     "params.admxParams",
+    "9821aghub":   "params.aghubParams",
+}
+
+
 class ptpMon:
     def __init__(self, **kwargs):
 
@@ -58,57 +78,15 @@ class ptpMon:
                 self.hosts.extend(value)
 
             if "deviceType" in key and value:
-                match value:
-                    case 'evIPG':
-                        from params.evipgParams import params, lookups
-                        print(params, 'imported params')
-
-                    case '570ipg':
-                        from params.ipgParams import params, lookups
-                        print(params, 'imported params')
-
-                    case '570aco':
-                        from params.acoParams import params, lookups
-                        print(params, 'imported params')
-
-                    case 'scorpion4':
-                        from params.scorpion4Params import params, lookups
-                        print(params, 'imported params')
-
-                    case 'scorpion6f':
-                        from params.scorpion6fParams import params, lookups
-                        print(params, 'imported params')
-
-                    case 'scorpionx18':
-                        from params.scorpionx18Params import params, lookups
-                        print(params, 'imported params')
-
-                    case '570j2k':
-                        from params.j2kParams import params, lookups
-                        print(params, 'imported params')
-
-                    case 'vip100g':
-                        from params.vip100gParams import params, lookups
-                        print(params, 'imported params')
-
-                    case 'svip':
-                        from params.svipParams import params, lookups
-                        print(params, 'imported params')
-
-                    case '570tg':
-                        from params.tgParams import params, lookups
-                        print(params, 'imported params')
-
-                    case '570admx':
-                        from params.admxParams import params, lookups
-                        print(params, 'imported params')
-
-                    case '9821aghub':
-                        from params.aghubParams import params, lookups
-                        print(params, 'imported params')
-
-                self.importedParams = params
-                self.importedLookups = lookups
+                module_name = _DEVICE_MODULES.get(value)
+                if module_name is None:
+                    raise ValueError(
+                        "Unsupported deviceType '%s'. Supported: %s"
+                        % (value, ", ".join(sorted(_DEVICE_MODULES)))
+                    )
+                module = importlib.import_module(module_name)
+                self.importedParams = module.params
+                self.importedLookups = module.lookups
 
             if "evaluateLeaderEligibility" in key:
                 self.evalEligibility = bool(value)
